@@ -1,0 +1,55 @@
+version: '3.8'
+
+services:
+    db:
+        container_name: ${APP_NAME}-db
+        image: postgres:${POSTGRESQL_VERSION}-alpine
+        ports:
+            - ${POSTGRESQL_PORT}:5432
+        environment:
+            TZ: "UTC"
+            LANG: ja_JP.UTF-8
+            POSTGRES_DB: ${APP_NAME}
+            POSTGRES_USER: ${APP_NAME}
+            POSTGRES_PASSWORD: ${APP_NAME}
+            POSTGRES_INITDB_ARGS: "--encoding=UTF-8"
+            POSTGRES_HOST_AUTH_METHOD: trust
+        depends_on:
+            - fluent-bit
+        logging:
+            driver: fluentd
+            options:
+              fluentd-address: "localhost:${FLUENT_BIT_PORT}"
+              tag: "docker.logging_driver.db"
+              fluentd-async-connect: "true"
+    fluent-bit:
+        container_name: ${APP_NAME}-fluent-bit
+        image: fluent/fluent-bit:${FLUENT_BIT_VERSION}
+        volumes:
+            - ./fluent-bit.conf:/fluent-bit/etc/fluent-bit.conf
+        ports:
+            - ${FLUENT_BIT_PORT}:24224
+        depends_on:
+            - elasticsearch
+    elasticsearch:
+        image: elasticsearch:${ELASTICSEARCH_VERSION}
+        ports:
+            - ${ELASTICSEARCH_PORT}:9200
+        environment:
+            - discovery.type=single-node
+            - cluster.name=docker-cluster
+            - bootstrap.memory_lock=true
+            - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+            - xpack.security.enabled=false
+        ulimits:
+            memlock:
+                soft: -1
+                hard: -1
+    kibana:
+        image: kibana:${KIBANA_VERSION}
+        ports:
+            - ${KIBANA_PORT}:5601
+        environment:
+            ELASTICSEARCH_URL: "http://elasticsearch:9200"
+        depends_on:
+            - elasticsearch
